@@ -45,6 +45,8 @@ class InteractivePiano extends StatefulWidget {
   /// Set and change at any time (i.e. with `setState`) to cause the piano to scroll so that the desired note is centered.
   final NotePosition? noteToScrollTo;
 
+  Map<NotePosition, String> settings;
+
   /// See individual parameters for more information. The only required parameter
   /// is `noteRange`. Since the widget wraps a scroll view and therefore has no
   /// "intrinsic" size, be sure to use inside a parent that specifies one.
@@ -65,9 +67,10 @@ class InteractivePiano extends StatefulWidget {
   ///
   /// Normally you'll want to pass `keyWidth`—if you don't, the entire range of notes
   /// will be squashed into the width of the widget.
-  const InteractivePiano(
-      {Key? key,
+  InteractivePiano(
+      {super.key,
       required this.noteRange,
+      required this.settings,
       this.highlightedNotes = const [],
       this.highlightColor = Colors.red,
       this.naturalColor = Colors.white,
@@ -78,8 +81,7 @@ class InteractivePiano extends StatefulWidget {
       this.hideScrollbar = false,
       this.onNotePositionTapped,
       this.noteToScrollTo,
-      this.keyWidth})
-      : super(key: key);
+      this.keyWidth});
 
   @override
   _InteractivePianoState createState() => _InteractivePianoState();
@@ -95,6 +97,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
   @override
   void initState() {
     _updateNotePositions();
+    print(widget.settings);
     super.initState();
   }
 
@@ -195,6 +198,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
                             children: naturals
                                 .map((note) => _PianoKey(
                                     notePosition: note,
+                                    noteKeyboardPosition: widget.settings[note] ?? '',
                                     color: widget.naturalColor,
                                     hideNoteName: widget.hideNoteNames,
                                     isAnimated: widget
@@ -221,6 +225,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
                                         .map(
                                           (note) => _PianoKey(
                                             notePosition: note,
+                                            noteKeyboardPosition: widget.settings[note] ?? '',
                                             color: widget.accidentalColor,
                                             hideNoteName: widget.hideNoteNames,
                                             isAnimated: widget
@@ -261,9 +266,12 @@ class _PianoKey extends StatefulWidget {
 
   final Color _color;
 
+  String noteKeyboardPosition;
+
   _PianoKey({
     Key? key,
     required this.notePosition,
+    required this.noteKeyboardPosition,
     required this.keyWidth,
     required this.hideNoteName,
     required this.onTap,
@@ -289,6 +297,7 @@ class __PianoKeyState extends State<_PianoKey>
 
   @override
   void initState() {
+    print(widget.notePosition.name);
     super.initState();
 
     const animationBegin = 1.0;
@@ -338,81 +347,94 @@ class __PianoKeyState extends State<_PianoKey>
 
   @override
   Widget build(BuildContext context) => Container(
-        width: widget.keyWidth,
-        padding: EdgeInsets.symmetric(
-            horizontal: (widget.keyWidth *
-                    (widget.notePosition.accidental == Accidental.None
-                        ? 0.02
-                        : 0.04))
-                .ceilToDouble()),
-        child: ScaleTransition(
-          scale: _animation,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Semantics(
-                  button: true,
-                  hint: widget.notePosition.name,
-                  child: Material(
-                      borderRadius: widget._borderRadius,
-                      elevation:
-                          widget.notePosition.accidental != Accidental.None
-                              ? 3.0
-                              : 0.0,
-                      shadowColor: Colors.black,
-                      color: widget._color,
-                      child: InkWell(
-                        borderRadius: widget._borderRadius,
-                        highlightColor: Colors.grey,
-                        onTap: widget.onTap == null ? null : () {},
-                        onTapDown: widget.onTap == null
-                            ? null
-                            : (_) {
-                                widget.onTap!();
-                              },
-                      ))),
-              Positioned(
-                left: 0.0,
-                right: 0.0,
-                bottom: widget.keyWidth / 3,
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: (widget.notePosition == NotePosition.middleC)
-                        ? const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          )
-                        : null,
-                    child: widget.hideNoteName
-                        ? SizedBox(
-                            width: widget.keyWidth / 2,
-                            height: widget.keyWidth / 2,
-                          )
-                        : Padding(
-                            padding: const EdgeInsets.all(2),
-                            child: Text(
-                              widget.notePosition.name,
-                              textAlign: TextAlign.center,
-                              textScaleFactor: 1.0,
-                              style: TextStyle(
-                                fontSize: widget.keyWidth / 3.5,
-                                color: widget.notePosition.accidental ==
-                                        Accidental.None
-                                    ? (widget.notePosition ==
-                                            NotePosition.middleC)
-                                        ? Colors.white
-                                        : Colors.black
-                                    : Colors.white,
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
+    width: widget.keyWidth,
+    padding: EdgeInsets.symmetric(
+        horizontal: (widget.keyWidth *
+            (widget.notePosition.accidental == Accidental.None
+                ? 0.02
+                : 0.04))
+            .ceilToDouble()),
+    child: ScaleTransition(
+      scale: _animation,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Semantics(
+              button: true,
+              hint: widget.notePosition.name,
+              child: Material(
+                  borderRadius: widget._borderRadius,
+                  elevation: widget.notePosition.accidental != Accidental.None
+                      ? 3.0
+                      : 0.0,
+                  shadowColor: Colors.black,
+                  color: widget._color,
+                  child: InkWell(
+                    borderRadius: widget._borderRadius,
+                    highlightColor: Colors.grey,
+                    onTap: widget.onTap == null ? null : () {},
+                    onTapDown: widget.onTap == null ? null : (_) {
+                      widget.onTap!();
+                    },
+                  )
+              )
           ),
-        ),
-      );
+          Positioned(
+            left: 0.0,
+            right: 0.0,
+            bottom: widget.keyWidth / 3,
+            child: IgnorePointer(
+              child: Column(
+                children: [
+                  if (widget.notePosition == NotePosition.middleC)
+                    Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      width: widget.keyWidth / 2,
+                      height: widget.keyWidth / 2,
+                    ),
+                  if (!widget.hideNoteName)
+                    Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Text(
+                        widget.notePosition.name,
+                        textAlign: TextAlign.center,
+                        textScaleFactor: 1.0,
+                        style: TextStyle(
+                          fontSize: widget.keyWidth / 3.5,
+                          color: widget.notePosition.accidental == Accidental.None
+                              ? Colors.black
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                  // Add the additional text below
+                  if (!widget.hideNoteName)
+                    Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Text(
+                        widget.noteKeyboardPosition,
+                        textAlign: TextAlign.center,
+                        textScaleFactor: 1.0,
+                        style: TextStyle(
+                          fontSize: widget.keyWidth / 3.5,
+                          color: widget.notePosition.accidental == Accidental.None
+                              ? Colors.black
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
 }
 
 class _MaybeScrollbar extends StatelessWidget {
