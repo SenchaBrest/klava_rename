@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'settings_manager.dart';
 import 'piano-lib/piano.dart';
 import 'screens/sf2_settings.dart';
-// import 'package:flutter_midi/flutter_midi.dart';
+import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 
 void main() {
   runApp(KlavaRename());
@@ -18,9 +18,15 @@ class KlavaRename extends StatefulWidget {
 }
 
 class _KlavaRenameState extends State<KlavaRename> {
-  // FlutterMidi flutterMidi = FlutterMidi();
-  SettingsManager settingsManager = SettingsManager();
+  final MidiPro midiPro = MidiPro();
+  final ValueNotifier<Map<int, String>> loadedSoundfonts = ValueNotifier<Map<int, String>>({});
+  final ValueNotifier<int?> selectedSfId = ValueNotifier<int?>(null);
+  final instrumentIndex = ValueNotifier<int>(0);
+  final bankIndex = ValueNotifier<int>(0);
+  final channelIndex = ValueNotifier<int>(0);
+  final volume = ValueNotifier<int>(127);
   Map<NotePosition, String> settings = {};
+  SettingsManager settingsManager = SettingsManager();
   bool isLoading = true;
   bool isBlocking = false;
   bool showSettings = false;
@@ -32,11 +38,61 @@ class _KlavaRenameState extends State<KlavaRename> {
     super.initState();
     loadSoundFont();
     loadSettings();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      pressedKey = event.physicalKey.debugName ?? '';
+      if (pressedKey == 'Audio Volume Up' || pressedKey == 'Audio Volume Down') {
+        return false;
+      }
+      if (isBlocking) {
+        setState(() {
+          isBlocking = false;
+          settingsManager.setSettingForNote(settings, tappedNote, pressedKey);
+          saveSettings();
+        });
+      } else {
+        playNoteFromSettings(pressedKey);
+      }
+    }
+    return true;
   }
 
   void loadSoundFont() async {
-    // ByteData byteData = await rootBundle.load('assets/sf2/Super_Nintendo_Unofficial_update.sf2');
-    // flutterMidi.prepare(sf2: byteData, name: "Super_Nintendo_Unofficial_update.sf2");
+    int sfId = await loadSoundfont('assets/sf2/Super_Nintendo_Unofficial_update.sf2', 0, 0);
+    await selectInstrument(sfId: sfId, program: 0, channel: 0, bank: 0);
+  }
+
+  Future<int> loadSoundfont(String path, int bank, int program) async {
+    if (loadedSoundfonts.value.containsValue(path)) {
+      return loadedSoundfonts.value.entries.firstWhere((element) => element.value == path).key;
+    }
+    final int sfId = await midiPro.loadSoundfont(path: path, bank: bank, program: program);
+    loadedSoundfonts.value = {sfId: path, ...loadedSoundfonts.value};
+    return sfId;
+  }
+
+  Future<void> selectInstrument({
+    required int sfId,
+    required int program,
+    int channel = 0,
+    int bank = 0,
+  }) async {
+    int? sfIdValue = sfId;
+    if (!loadedSoundfonts.value.containsKey(sfId)) {
+      sfIdValue = loadedSoundfonts.value.keys.first;
+    } else {
+      selectedSfId.value = sfId;
+    }
+    await midiPro.selectInstrument(sfId: sfIdValue, channel: channel, bank: bank, program: program);
   }
 
   void loadSettings() async {
@@ -50,106 +106,129 @@ class _KlavaRenameState extends State<KlavaRename> {
     await settingsManager.saveSettings(settings);
   }
 
+  void playNoteFromSettings(String key) {
+    NotePosition? position = settingsManager.getNoteForSetting(settings, key);
+    if (position != null) {
+      Map<String, int> noteValues = {
+        'C': 0, 'C♯': 1,
+        'D': 2, 'D♯': 3,
+        'E': 4,
+        'F': 5, 'F♯': 6,
+        'G': 7, 'G♯': 8,
+        'A': 9, 'A♯': 10,
+        'B': 11,
+      };
+      int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
+
+      playNote(
+        key: midiNumber,
+        velocity: volume.value,
+        channel: channelIndex.value,
+        sfId: selectedSfId.value!,
+      );
+    }
+  }
+
+  Future<void> playNote({
+    required int key,
+    required int velocity,
+    int channel = 0,
+    int sfId = 1,
+  }) async {
+    await midiPro.playNote(
+      channel: channel,
+      key: key,
+      velocity: velocity,
+      sfId: sfId,
+    );
+  }
+
+  Future<void> stopNote({
+    required int key,
+    int channel = 0,
+    int sfId = 1,
+  }) async {
+    await midiPro.stopNote(
+      channel: channel,
+      key: key,
+      sfId: sfId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
-      focusNode: FocusNode(),
-      autofocus: true,
-      onKeyEvent: (KeyEvent event) {
-        if (event is KeyDownEvent) {
-          pressedKey = event.logicalKey.debugName ?? '';
-          if (isBlocking) {
-            setState(() {
-              isBlocking = false;
-              settingsManager.setSettingForNote(settings, tappedNote, pressedKey);
-              saveSettings();
-            });
-          } else {
-            playNote(settingsManager.getNoteForSetting(settings, pressedKey));
-            print(1);
-          }
-        }
-      },
-      child: CupertinoApp(
-        title: 'Klava Rename',
-        home: Scaffold(
-          body: Stack(
-            children: [
-              Center(
-                child: isLoading
-                    ? const CircularProgressIndicator()
-                    : InteractivePiano(
-                  settings: settings,
-                  naturalColor: Colors.white,
-                  accidentalColor: Colors.black,
-                  keyWidth: 60,
-                  noteRange: NoteRange(
-                    from: NotePosition(note: Note.A, octave: 0),
-                    to: NotePosition(note: Note.C, octave: 8),
+    return CupertinoApp(
+      title: 'Klava Rename',
+      home: Scaffold(
+        body: Stack(
+          children: [
+            Center(
+              child: isLoading
+                  ? const CircularProgressIndicator()
+                  : InteractivePiano(
+                settings: settings,
+                naturalColor: Colors.white,
+                accidentalColor: Colors.black,
+                keyWidth: 60,
+                noteRange: NoteRange(
+                  from: NotePosition(note: Note.A, octave: 0),
+                  to: NotePosition(note: Note.C, octave: 8),
+                ),
+                onNotePositionTapped: (position) {
+                  setState(() {
+                    tappedNote = position;
+                    isBlocking = true;
+                  });
+                },
+              ),
+            ),
+            if (isBlocking) ...[
+              AbsorbPointer(
+                absorbing: true,
+                child: Opacity(
+                  opacity: 0.6,
+                  child: Container(
+                    color: Colors.black,
                   ),
-                  onNotePositionTapped: (position) {
-                    setState(() {
-                      tappedNote = position;
-                      isBlocking = true;
-                    });
-                  },
                 ),
               ),
-              if (isBlocking) ...[
-                AbsorbPointer(
-                  absorbing: true,
-                  child: Opacity(
-                    opacity: 0.6,
-                    child: Container(
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-                buildBlockingWidget(),
-              ],
-              Positioned(
-                top: 40,
-                right: 20,
-                child: isBlocking
-                    ? Container()
-                    : CupertinoButton(
-                  color: Colors.grey.withOpacity(0.5),
-                  padding: EdgeInsets.all(8),
-                  child: const Icon(
-                    Icons.settings,
-                    size: 30,
-                    color: Colors.white,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      showSettings = true;
-                    });
-                  },
-                ),
-              ),
-              // Внутри метода build основного виджета
-              // Внутри метода build основного виджета
-              if (showSettings)
-                SettingsWidget(
-                  onSave: (int option1, int option2, int option3, int option4) {
-                    setState(() {
-                      showSettings = false;
-                      print('Selected Option 1: $option1');
-                      print('Selected Option 2: $option2');
-                      print('Selected Option 3: $option3');
-                    });
-                  },
-                  onCancel: () {
-                    setState(() {
-                      showSettings = false;
-                    });
-                  },
-                ),
-
-
+              buildBlockingWidget(),
             ],
-
-          ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: isBlocking
+                  ? Container()
+                  : CupertinoButton(
+                color: Colors.grey.withOpacity(0.5),
+                padding: EdgeInsets.all(8),
+                child: const Icon(
+                  Icons.settings,
+                  size: 30,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  setState(() {
+                    showSettings = true;
+                  });
+                },
+              ),
+            ),
+            if (showSettings)
+              SettingsWidget(
+                onSave: (List<dynamic> option) {
+                  setState(() {
+                    showSettings = false;
+                    print('Selected Options: $option');
+                  });
+                },
+                onCancel: () {
+                  setState(() {
+                    showSettings = false;
+                  });
+                },
+              ),
+          ],
         ),
       ),
     );
@@ -234,12 +313,5 @@ class _KlavaRenameState extends State<KlavaRename> {
         ),
       ),
     );
-  }
-
-  void playNote(NotePosition? position) {
-    // if (position != null) {
-    //   int midiNumber = position.octave * 12 + position.note.index + 21;
-    //   flutterMidi.playMidiNote(midi: midiNumber);
-    // }
   }
 }

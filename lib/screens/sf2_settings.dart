@@ -1,9 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 
 class SettingsWidget extends StatefulWidget {
-  final Function(int, int, int, int) onSave;
+  final Function(List<dynamic>) onSave;
   final VoidCallback onCancel;
 
   const SettingsWidget({
@@ -17,11 +16,14 @@ class SettingsWidget extends StatefulWidget {
 }
 
 class _SettingsWidgetState extends State<SettingsWidget> {
-  int selectedOption1 = 0;
-  int selectedOption2 = 0;
-  int selectedOption3 = 0;
-  int selectedOption4 = 0;
-  String? selectedFile;
+  List<dynamic> selectedOptions = [0, 0, 0, 0];
+
+  final List<List<dynamic>> optionsData = [
+    [0, 1, 2, 3, 4], // Data for first picker
+    ['A', 'B', 'C', 'D'], // Data for second picker
+    [10.0, 20.0, 30.0, 40.0], // Data for third picker
+    ['One', 'Two', 'Three'] // Data for fourth picker
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -39,28 +41,19 @@ class _SettingsWidgetState extends State<SettingsWidget> {
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: _buildPicker(1),
-                  ),
-                  Expanded(
-                    child: _buildPicker(2),
-                  ),
-                  Expanded(
-                    child: _buildPicker(3),
-                  ),
-                  Expanded(
-                    child: _buildPicker(4),
-                  ),
-                  CupertinoButton(
-                    color: Colors.blue,
-                    child: const Text(
-                      "Select File",
-                      style: TextStyle(color: Colors.white, fontSize: 24),
+                children: List.generate(optionsData.length, (index) {
+                  return Expanded(
+                    child: CustomPicker(
+                      initialValue: selectedOptions[index],
+                      data: optionsData[index],
+                      onSelectedItemChanged: (value) {
+                        setState(() {
+                          selectedOptions[index] = value;
+                        });
+                      },
                     ),
-                    onPressed: _pickFile,
-                  ),
-                ],
+                  );
+                }),
               ),
               const SizedBox(height: 20),
               Row(
@@ -68,7 +61,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                 children: [
                   CupertinoButton.filled(
                     onPressed: () {
-                      widget.onSave(selectedOption1, selectedOption2, selectedOption3, selectedOption4);
+                      widget.onSave(selectedOptions);
                     },
                     child: const Text('Save Settings'),
                   ),
@@ -85,56 +78,39 @@ class _SettingsWidgetState extends State<SettingsWidget> {
       ),
     );
   }
+}
 
-  Widget _buildPicker(int option) {
-    List<Widget> items = List<Widget>.generate(15, (int index) {
-      return Center(child: Text('Option $index', style: const TextStyle(color: Colors.white)));
-    });
+class CustomPicker extends StatelessWidget {
+  final dynamic initialValue;
+  final List<dynamic> data;
+  final ValueChanged<dynamic> onSelectedItemChanged;
 
-    if (option == 4 && selectedFile != null) {
-      items.add(Center(child: Text('Selected File: $selectedFile', style: const TextStyle(color: Colors.white))));
-    }
+  CustomPicker({
+    required this.initialValue,
+    required this.data,
+    required this.onSelectedItemChanged,
+  });
 
+  @override
+  Widget build(BuildContext context) {
     return Container(
       height: 200,
       child: CupertinoPicker(
         backgroundColor: Colors.black87,
         itemExtent: 30,
-        scrollController: FixedExtentScrollController(
-          initialItem: option == 1
-              ? selectedOption1
-              : option == 2
-              ? selectedOption2
-              : option == 3
-              ? selectedOption3
-              : selectedOption4,
-        ),
-        children: items,
-        onSelectedItemChanged: (int value) {
-          setState(() {
-            if (option == 1) {
-              selectedOption1 = value;
-            } else if (option == 2) {
-              selectedOption2 = value;
-            } else if (option == 3) {
-              selectedOption3 = value;
-            } else {
-              selectedOption4 = value;
-            }
-          });
+        scrollController: FixedExtentScrollController(initialItem: data.indexOf(initialValue)),
+        children: data.map<Widget>((item) {
+          return Center(
+            child: Text(
+              item.toString(),
+              style: const TextStyle(color: Colors.white),
+            ),
+          );
+        }).toList(),
+        onSelectedItemChanged: (index) {
+          onSelectedItemChanged(data[index]);
         },
       ),
     );
-  }
-
-  Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
-
-    if (result != null) {
-      setState(() {
-        selectedFile = result.files.single.name;
-        selectedOption4 = 0;  // Reset selected option for the fourth picker
-      });
-    }
   }
 }
