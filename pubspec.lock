@@ -309,14 +309,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.99"
-  soundfont_dart_parser:
-    dependency: "direct main"
-    description:
-      name: soundfont_dart_parser
-      sha256: b1eef5d1120b30d7507b0862362b8866021191f837cb995ed8cf9af2ed02fab2
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.1"
   source_span:
     dependency: transitive
     description:

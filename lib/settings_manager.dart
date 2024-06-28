@@ -5,7 +5,7 @@ import 'package:collection/collection.dart';
 
 class SettingsManager {
   static const String _settingsKey = 'settings';
-  final Map<NotePosition, String> defaultSettings = {};
+  final Map<NotePosition, Set<String>> defaultSettings = {};
 
   SettingsManager() {
     generateDefaultSettings();
@@ -17,55 +17,67 @@ class SettingsManager {
       for (Note note in notes) {
         for (Accidental accidental in note.accidentals) {
           NotePosition notePosition = NotePosition(note: note, octave: octave, accidental: accidental);
-          defaultSettings[notePosition] = '';
+          defaultSettings[notePosition] = {};
           if (notePosition.name == 'C8') break;
         }
       }
     }
   }
 
-  Future<void> saveSettings(Map<NotePosition, String> settings) async {
+  Future<void> saveSettings(Map<NotePosition, Set<String>> settings) async {
     final prefs = await SharedPreferences.getInstance();
-    String encodedSettings = json.encode(settings.map((k, v) => MapEntry(k.name, v)));
+    String encodedSettings = json.encode(settings.map((k, v) => MapEntry(k.name, v.toList())));
     await prefs.setString(_settingsKey, encodedSettings);
   }
 
-  Future<Map<NotePosition, String>> loadSettings() async {
+  Future<Map<NotePosition, Set<String>>> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     String? encodedSettings = prefs.getString(_settingsKey);
     if (encodedSettings != null) {
       Map<String, dynamic> decodedMap = json.decode(encodedSettings);
-      return decodedMap.map((k, v) => MapEntry(NotePosition.fromName(k)!, v ?? ''));
+      return decodedMap.map((k, v) {
+        var key = NotePosition.fromName(k)!;
+        var value = v is List ? Set<String>.from(v) : <String>{v};
+        return MapEntry(key, value);
+      });
     } else {
-      return Map<NotePosition, String>.from(defaultSettings);
+      return Map<NotePosition, Set<String>>.from(defaultSettings);
     }
   }
 
-  // Method to get the setting for a specific note
-  String? getSettingForNote(Map<NotePosition, String> settings, NotePosition note) {
+  // Method to get the settings for a specific note
+  Set<String>? getSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note) {
     return settings[note];
   }
 
-  // Method to get the note for a specific setting
-  NotePosition? getNoteForSetting(Map<NotePosition, String> settings, String setting) {
-    return settings.keys.firstWhereOrNull((k) => settings[k] == setting);
+  // Method to get the notes for a specific setting
+  Set<NotePosition> getNotesForSetting(Map<NotePosition, Set<String>> settings, String setting) {
+    return settings.keys.where((k) => settings[k]!.contains(setting)).toSet();
   }
 
-  // Method to set the setting for a specific note and remove it from other notes
-  void setSettingForNote(Map<NotePosition, String> settings, NotePosition note, String setting) {
-    // Find the current note that has this setting and remove it
-    NotePosition? currentNote = getNoteForSetting(settings, setting);
-    if (currentNote != null) {
-      settings[currentNote] = '';
-    }
-
-    // Assign the setting to the new note
-    settings[note] = setting;
+  // Method to set the settings for a specific note and remove it from other notes
+  void setSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note, String setting) {
+    settings.putIfAbsent(note, () => <String>{}).add(setting);
   }
 
   // Method to reset settings to default
-  void resetSettings(Map<NotePosition, String> settings) {
+  void resetSettings(Map<NotePosition, Set<String>> settings) {
     settings.clear();
     settings.addAll(defaultSettings);
+  }
+
+  // Method to delete all settings for a specific note
+  void deleteAllSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note) {
+    settings.remove(note);
+  }
+
+  // Method to delete a specific setting of a note
+  void deleteSpecificSettingOfNote(Map<NotePosition, Set<String>> settings, NotePosition note, String setting) {
+    if (settings.containsKey(note)) {
+      settings[note]!.remove(setting);
+      if (settings[note]!.isEmpty) {
+        settings.remove(note);
+      }
+    }
   }
 }

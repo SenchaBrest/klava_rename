@@ -45,7 +45,7 @@ class InteractivePiano extends StatefulWidget {
   /// Set and change at any time (i.e. with `setState`) to cause the piano to scroll so that the desired note is centered.
   final NotePosition? noteToScrollTo;
 
-  Map<NotePosition, String> settings;
+  Map<NotePosition, Set<String>> settings;
 
   /// See individual parameters for more information. The only required parameter
   /// is `noteRange`. Since the widget wraps a scroll view and therefore has no
@@ -198,7 +198,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
                             children: naturals
                                 .map((note) => _PianoKey(
                                     notePosition: note,
-                                    noteKeyboardPosition: widget.settings[note] ?? '',
+                                    noteKeyboardPosition: widget.settings[note]?.join('\n') ?? '',
                                     color: widget.naturalColor,
                                     hideNoteName: widget.hideNoteNames,
                                     isAnimated: widget
@@ -225,7 +225,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
                                         .map(
                                           (note) => _PianoKey(
                                             notePosition: note,
-                                            noteKeyboardPosition: widget.settings[note] ?? '',
+                                            noteKeyboardPosition: widget.settings[note]?.join('\n') ?? '',
                                             color: widget.accidentalColor,
                                             hideNoteName: widget.hideNoteNames,
                                             isAnimated: widget
@@ -386,6 +386,28 @@ class __PianoKeyState extends State<_PianoKey>
             child: IgnorePointer(
               child: Column(
                 children: [
+                  if (!widget.hideNoteName)
+                    Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue, // Цвет фона
+                          borderRadius: BorderRadius.circular(8), // Закругленные углы
+                        ),
+                        child: Text(
+                          widget.noteKeyboardPosition,
+                          textAlign: TextAlign.center,
+                          textScaleFactor: 1.0,
+                          style: TextStyle(
+                            fontSize: widget.keyWidth / 3.5,
+                            color: widget.notePosition.accidental == Accidental.None
+                                ? Colors.black
+                                : Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+
                   if (widget.notePosition == NotePosition.middleC)
                     Container(
                       decoration: const BoxDecoration(
@@ -396,33 +418,24 @@ class __PianoKeyState extends State<_PianoKey>
                       height: widget.keyWidth / 2,
                     ),
                   if (!widget.hideNoteName)
+
                     Padding(
                       padding: const EdgeInsets.all(2),
-                      child: Text(
-                        widget.notePosition.name,
-                        textAlign: TextAlign.center,
-                        textScaleFactor: 1.0,
-                        style: TextStyle(
-                          fontSize: widget.keyWidth / 3.5,
-                          color: widget.notePosition.accidental == Accidental.None
-                              ? Colors.black
-                              : Colors.white,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.green, // Цвет фона для второго текста
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      ),
-                    ),
-                  // Add the additional text below
-                  if (!widget.hideNoteName)
-                    Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: Text(
-                        widget.noteKeyboardPosition,
-                        textAlign: TextAlign.center,
-                        textScaleFactor: 1.0,
-                        style: TextStyle(
-                          fontSize: widget.keyWidth / 3.5,
-                          color: widget.notePosition.accidental == Accidental.None
-                              ? Colors.black
-                              : Colors.white,
+                        child: Text(
+                          widget.notePosition.name,
+                          textAlign: TextAlign.center,
+                          textScaleFactor: 1.0,
+                          style: TextStyle(
+                            fontSize: widget.keyWidth / 3.5,
+                            color: widget.notePosition.accidental == Accidental.None
+                                ? Colors.black
+                                : Colors.black,
+                          ),
                         ),
                       ),
                     ),

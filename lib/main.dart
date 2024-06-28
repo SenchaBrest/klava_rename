@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'settings_manager.dart';
 import 'piano-lib/piano.dart';
 import 'screens/sf2_settings.dart';
-import 'package:flutter_midi_pro/flutter_midi_pro.dart';
+import 'midi_manager.dart';
+import 'widgets/note_settings_widget.dart';
+import 'widgets/keyboard_settings_widget.dart';
 
 void main() {
   runApp(KlavaRename());
@@ -17,21 +19,19 @@ class KlavaRename extends StatefulWidget {
   _KlavaRenameState createState() => _KlavaRenameState();
 }
 
-class _KlavaRenameState extends State<KlavaRename> {
-  final MidiPro midiPro = MidiPro();
-  final ValueNotifier<Map<int, String>> loadedSoundfonts = ValueNotifier<Map<int, String>>({});
-  final ValueNotifier<int?> selectedSfId = ValueNotifier<int?>(null);
-  final instrumentIndex = ValueNotifier<int>(0);
-  final bankIndex = ValueNotifier<int>(0);
-  final channelIndex = ValueNotifier<int>(0);
-  final volume = ValueNotifier<int>(127);
-  Map<NotePosition, String> settings = {};
+class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStateMixin {
+  final MidiManager midiManager = MidiManager();
+  Map<NotePosition, Set<String>> settings = {};
   SettingsManager settingsManager = SettingsManager();
   bool isLoading = true;
-  bool isBlocking = false;
+  bool showNoteSettings = false;
   bool showSettings = false;
+  bool showExtraButtons = false;
+  bool showKeyboardSettings = false;
   late NotePosition tappedNote;
   String pressedKey = "";
+  late AnimationController _animationController;
+  late Animation<Offset> _offsetAnimation;
 
   @override
   void initState() {
@@ -39,11 +39,25 @@ class _KlavaRenameState extends State<KlavaRename> {
     loadSoundFont();
     loadSettings();
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0.5, 0.0),
+      end: const Offset(0.0, 0.0),
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -53,10 +67,10 @@ class _KlavaRenameState extends State<KlavaRename> {
       if (pressedKey == 'Audio Volume Up' || pressedKey == 'Audio Volume Down') {
         return false;
       }
-      if (isBlocking) {
+      if (showNoteSettings) {
         setState(() {
-          isBlocking = false;
-          settingsManager.setSettingForNote(settings, tappedNote, pressedKey);
+          showNoteSettings = false;
+          settingsManager.setSettingsForNote(settings, tappedNote, pressedKey);
           saveSettings();
         });
       } else {
@@ -67,32 +81,8 @@ class _KlavaRenameState extends State<KlavaRename> {
   }
 
   void loadSoundFont() async {
-    int sfId = await loadSoundfont('assets/sf2/Super_Nintendo_Unofficial_update.sf2', 0, 0);
-    await selectInstrument(sfId: sfId, program: 0, channel: 0, bank: 0);
-  }
-
-  Future<int> loadSoundfont(String path, int bank, int program) async {
-    if (loadedSoundfonts.value.containsValue(path)) {
-      return loadedSoundfonts.value.entries.firstWhere((element) => element.value == path).key;
-    }
-    final int sfId = await midiPro.loadSoundfont(path: path, bank: bank, program: program);
-    loadedSoundfonts.value = {sfId: path, ...loadedSoundfonts.value};
-    return sfId;
-  }
-
-  Future<void> selectInstrument({
-    required int sfId,
-    required int program,
-    int channel = 0,
-    int bank = 0,
-  }) async {
-    int? sfIdValue = sfId;
-    if (!loadedSoundfonts.value.containsKey(sfId)) {
-      sfIdValue = loadedSoundfonts.value.keys.first;
-    } else {
-      selectedSfId.value = sfId;
-    }
-    await midiPro.selectInstrument(sfId: sfIdValue, channel: channel, bank: bank, program: program);
+    int sfId = await midiManager.loadSoundfont('assets/sf2/Super_Nintendo_Unofficial_update.sf2', 0, 0);
+    await midiManager.selectInstrument(sfId: sfId, program: 0, channel: 0, bank: 0);
   }
 
   void loadSettings() async {
@@ -107,8 +97,8 @@ class _KlavaRenameState extends State<KlavaRename> {
   }
 
   void playNoteFromSettings(String key) {
-    NotePosition? position = settingsManager.getNoteForSetting(settings, key);
-    if (position != null) {
+    Set<NotePosition>? positions = settingsManager.getNotesForSetting(settings, key);
+    for (var position in positions) {
       Map<String, int> noteValues = {
         'C': 0, 'C♯': 1,
         'D': 2, 'D♯': 3,
@@ -120,39 +110,13 @@ class _KlavaRenameState extends State<KlavaRename> {
       };
       int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
 
-      playNote(
+      midiManager.playNote(
         key: midiNumber,
-        velocity: volume.value,
-        channel: channelIndex.value,
-        sfId: selectedSfId.value!,
+        velocity: midiManager.volume.value,
+        channel: midiManager.channelIndex.value,
+        sfId: midiManager.selectedSfId.value!,
       );
     }
-  }
-
-  Future<void> playNote({
-    required int key,
-    required int velocity,
-    int channel = 0,
-    int sfId = 1,
-  }) async {
-    await midiPro.playNote(
-      channel: channel,
-      key: key,
-      velocity: velocity,
-      sfId: sfId,
-    );
-  }
-
-  Future<void> stopNote({
-    required int key,
-    int channel = 0,
-    int sfId = 1,
-  }) async {
-    await midiPro.stopNote(
-      channel: channel,
-      key: key,
-      sfId: sfId,
-    );
   }
 
   @override
@@ -160,156 +124,130 @@ class _KlavaRenameState extends State<KlavaRename> {
     return CupertinoApp(
       title: 'Klava Rename',
       home: Scaffold(
+        resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
             Center(
               child: isLoading
                   ? const CircularProgressIndicator()
-                  : InteractivePiano(
-                settings: settings,
-                naturalColor: Colors.white,
-                accidentalColor: Colors.black,
-                keyWidth: 60,
-                noteRange: NoteRange(
-                  from: NotePosition(note: Note.A, octave: 0),
-                  to: NotePosition(note: Note.C, octave: 8),
-                ),
-                onNotePositionTapped: (position) {
-                  setState(() {
-                    tappedNote = position;
-                    isBlocking = true;
-                  });
-                },
-              ),
-            ),
-            if (isBlocking) ...[
-              AbsorbPointer(
-                absorbing: true,
-                child: Opacity(
-                  opacity: 0.6,
-                  child: Container(
-                    color: Colors.black,
+                  : AbsorbPointer(
+                absorbing: showExtraButtons || showNoteSettings,
+                child: InteractivePiano(
+                  settings: settings,
+                  naturalColor: Colors.white,
+                  accidentalColor: Colors.black,
+                  keyWidth: 60,
+                  noteRange: NoteRange(
+                    from: NotePosition(note: Note.A, octave: 0),
+                    to: NotePosition(note: Note.C, octave: 8),
                   ),
+                  onNotePositionTapped: (position) {
+                    setState(() {
+                      tappedNote = position;
+                      showNoteSettings = true;
+                    });
+                  },
                 ),
-              ),
-              buildBlockingWidget(),
-            ],
-            Positioned(
-              top: 40,
-              right: 20,
-              child: isBlocking
-                  ? Container()
-                  : CupertinoButton(
-                color: Colors.grey.withOpacity(0.5),
-                padding: EdgeInsets.all(8),
-                child: const Icon(
-                  Icons.settings,
-                  size: 30,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  setState(() {
-                    showSettings = true;
-                  });
-                },
               ),
             ),
-            if (showSettings)
-              SettingsWidget(
-                onSave: (List<dynamic> option) {
+            if (showNoteSettings) ...[
+              NoteSettingsWidget(
+                text: "${tappedNote.note.name}${tappedNote.octave}",
+                onCancel: () {
                   setState(() {
-                    showSettings = false;
-                    print('Selected Options: $option');
+                    showNoteSettings = false;
+                  });
+                },
+                onDelete: () {
+                  setState(() {
+                    showNoteSettings = false;
+                  });
+                  settingsManager.deleteAllSettingsForNote(settings, tappedNote);
+                  saveSettings();
+                },
+              ),
+            ],
+            if (showKeyboardSettings) ...[
+              SinglePickerWidget(
+                initialData: ['d', 'f'],
+                onSave: (List<dynamic> l, dynamic d) {
+                  setState(() {
+                    showKeyboardSettings = false;
                   });
                 },
                 onCancel: () {
                   setState(() {
-                    showSettings = false;
+                    showKeyboardSettings = false;
                   });
                 },
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildBlockingWidget() {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black87,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                  ),
+            ],
+            if (!showNoteSettings && !showKeyboardSettings)
+              Positioned(
+                top: 40,
+                right: 20,
+                child: Row(
                   children: [
-                    const TextSpan(text: "You set up "),
-                    TextSpan(
-                      text: "${tappedNote.note.name}${tappedNote.octave}",
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 32,
+                    if (showExtraButtons)
+                      SlideTransition(
+                        position: _offsetAnimation,
+                        child: Row(
+                          children: [
+                            CupertinoButton(
+                              color: Colors.grey.withOpacity(0.5),
+                              padding: EdgeInsets.all(8),
+                              child: const Icon(
+                                Icons.music_note,
+                                size: 30,
+                                color: Colors.white,
+                              ),
+                              onPressed: () {
+                                // Your volume up action
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            CupertinoButton(
+                              color: Colors.grey.withOpacity(0.5),
+                              padding: EdgeInsets.all(8),
+                              child: const Icon(
+                                Icons.keyboard,
+                                size: 30,
+                                color: Colors.white,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  showExtraButtons = false;
+                                  showKeyboardSettings = true;
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                        ),
                       ),
+                    CupertinoButton(
+                      color: Colors.grey.withOpacity(0.5),
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        !showExtraButtons ? Icons.settings : Icons.keyboard_double_arrow_right,
+                        size: 30,
+                        color: Colors.white,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          showExtraButtons = !showExtraButtons;
+                          if (showExtraButtons) {
+                            _animationController.forward();
+                          } else {
+                            _animationController.reverse();
+                          }
+                        });
+                      },
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                "Press any key to continue",
-                style: TextStyle(color: Colors.white, fontSize: 24),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 180,
-                    child: CupertinoButton(
-                      color: Colors.blueGrey,
-                      padding: EdgeInsets.zero,
-                      child: const Icon(
-                        Icons.cancel,
-                        size: 30,
-                        color: Colors.white,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          isBlocking = false;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 60,
-                    child: CupertinoButton(
-                      color: Colors.red,
-                      padding: EdgeInsets.zero,
-                      child: const Icon(
-                        Icons.delete,
-                        size: 30,
-                        color: Colors.white,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          isBlocking = false;
-                        });
-                        settingsManager.setSettingForNote(settings, tappedNote, '');
-                        saveSettings();
-                      },
-                    ),
-                  ),
-                ],
-              )
-            ],
-          ),
+          ],
         ),
       ),
     );
