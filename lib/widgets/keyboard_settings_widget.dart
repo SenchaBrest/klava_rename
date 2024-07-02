@@ -2,8 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class SinglePickerWidget extends StatefulWidget {
-  final List<dynamic> initialData;
-  final Function(List<dynamic>, dynamic) onSave;
+  final List<String> initialData;
+  final Function(List<String>, String) onSave;
   final VoidCallback onCancel;
 
   const SinglePickerWidget({
@@ -18,7 +18,7 @@ class SinglePickerWidget extends StatefulWidget {
 }
 
 class _SinglePickerWidgetState extends State<SinglePickerWidget> {
-  List<dynamic> pickerData = [];
+  List<String> pickerData = [];
   dynamic selectedValue;
   TextEditingController textController = TextEditingController();
   bool showInputField = false;

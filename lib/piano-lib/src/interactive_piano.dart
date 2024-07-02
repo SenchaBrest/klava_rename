@@ -424,7 +424,7 @@ class __PianoKeyState extends State<_PianoKey>
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.green, // Цвет фона для второго текста
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
                           widget.notePosition.name,

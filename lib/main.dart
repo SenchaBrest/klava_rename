@@ -21,8 +21,13 @@ class KlavaRename extends StatefulWidget {
 
 class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStateMixin {
   final MidiManager midiManager = MidiManager();
+
   Map<NotePosition, Set<String>> settings = {};
+  List<String> settingsNames = [];
   SettingsManager settingsManager = SettingsManager();
+  String defaultSettingsName = 'default';
+  String currentSettingsName = 'default';
+
   bool isLoading = true;
   bool showNoteSettings = false;
   bool showSettings = false;
@@ -32,6 +37,7 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   String pressedKey = "";
   late AnimationController _animationController;
   late Animation<Offset> _offsetAnimation;
+
 
   @override
   void initState() {
@@ -82,18 +88,19 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
 
   void loadSoundFont() async {
     int sfId = await midiManager.loadSoundfont('assets/sf2/Super_Nintendo_Unofficial_update.sf2', 0, 0);
-    await midiManager.selectInstrument(sfId: sfId, program: 0, channel: 0, bank: 0);
+    await midiManager.selectInstrument(sfId: sfId, program: 50, channel: 0, bank: 0);
   }
 
   void loadSettings() async {
-    settings = await settingsManager.loadSettings();
+    settings = await settingsManager.loadSettings(currentSettingsName);
+    settingsNames = await settingsManager.getAllSettingsNames();
     setState(() {
       isLoading = false;
     });
   }
 
   void saveSettings() async {
-    await settingsManager.saveSettings(settings);
+    await settingsManager.saveSettings(currentSettingsName, settings);
   }
 
   void playNoteFromSettings(String key) {
@@ -169,11 +176,16 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
             ],
             if (showKeyboardSettings) ...[
               SinglePickerWidget(
-                initialData: ['d', 'f'],
-                onSave: (List<dynamic> l, dynamic d) {
+                initialData: settingsNames,
+                onSave: (List<String> newSettingsNames, String newCurrentSettingName) {
+                  settingsNames = newSettingsNames;
+                  currentSettingsName = newCurrentSettingName;
+                  loadSettings();
                   setState(() {
                     showKeyboardSettings = false;
+
                   });
+
                 },
                 onCancel: () {
                   setState(() {

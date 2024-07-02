@@ -4,7 +4,7 @@ import 'piano-lib/src/note_position.dart';
 import 'package:collection/collection.dart';
 
 class SettingsManager {
-  static const String _settingsKey = 'settings';
+  static const String _settingsKeyPrefix = 'settings_';
   final Map<NotePosition, Set<String>> defaultSettings = {};
 
   SettingsManager() {
@@ -24,15 +24,15 @@ class SettingsManager {
     }
   }
 
-  Future<void> saveSettings(Map<NotePosition, Set<String>> settings) async {
+  Future<void> saveSettings(String settingsName, Map<NotePosition, Set<String>> settings) async {
     final prefs = await SharedPreferences.getInstance();
     String encodedSettings = json.encode(settings.map((k, v) => MapEntry(k.name, v.toList())));
-    await prefs.setString(_settingsKey, encodedSettings);
+    await prefs.setString(_settingsKeyPrefix + settingsName, encodedSettings);
   }
 
-  Future<Map<NotePosition, Set<String>>> loadSettings() async {
+  Future<Map<NotePosition, Set<String>>> loadSettings(String settingsName) async {
     final prefs = await SharedPreferences.getInstance();
-    String? encodedSettings = prefs.getString(_settingsKey);
+    String? encodedSettings = prefs.getString(_settingsKeyPrefix + settingsName);
     if (encodedSettings != null) {
       Map<String, dynamic> decodedMap = json.decode(encodedSettings);
       return decodedMap.map((k, v) {
@@ -43,6 +43,19 @@ class SettingsManager {
     } else {
       return Map<NotePosition, Set<String>>.from(defaultSettings);
     }
+  }
+
+  Future<void> deleteSettings(String settingsName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_settingsKeyPrefix + settingsName);
+  }
+
+  Future<List<String>> getAllSettingsNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    return keys.where((key) => key.startsWith(_settingsKeyPrefix))
+        .map((key) => key.substring(_settingsKeyPrefix.length))
+        .toList();
   }
 
   // Method to get the settings for a specific note
