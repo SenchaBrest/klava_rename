@@ -1,14 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../settings_manager.dart';
 
 class SinglePickerWidget extends StatefulWidget {
-  final List<String> initialData;
-  final Function(List<String>, String) onSave;
+  final Function(String) onSave;
   final VoidCallback onCancel;
 
   const SinglePickerWidget({
     super.key,
-    required this.initialData,
     required this.onSave,
     required this.onCancel,
   });
@@ -22,34 +21,45 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
   dynamic selectedValue;
   TextEditingController textController = TextEditingController();
   bool showInputField = false;
+  final SettingsManager settingsManager = SettingsManager();
 
   @override
   void initState() {
     super.initState();
-    pickerData = List.from(widget.initialData);
-    if (pickerData.isNotEmpty) {
-      selectedValue = pickerData[0];
-    }
+    _loadInitialData();
   }
 
-  void _addEntry(String newEntry) {
+  Future<void> _loadInitialData() async {
+    List<String> settingsNames = await settingsManager.getAllSettingsNames();
+    setState(() {
+      pickerData = settingsNames;
+      if (pickerData.isNotEmpty) {
+        selectedValue = pickerData[0];
+      }
+    });
+  }
+
+  void _addEntry(String newEntry) async {
     setState(() {
       pickerData.add(newEntry);
       selectedValue = newEntry;
       showInputField = false; // Hide input field after adding entry
     });
+    await settingsManager.addDefaultSettings(newEntry);
   }
 
-  void _removeEntry() {
+  void _removeEntry() async {
     if (pickerData.isNotEmpty) {
+      String entryToRemove = selectedValue;
       setState(() {
-        pickerData.remove(selectedValue);
+        pickerData.remove(entryToRemove);
         if (pickerData.isNotEmpty) {
           selectedValue = pickerData[0];
         } else {
           selectedValue = null;
         }
       });
+      await settingsManager.deleteSettings(entryToRemove);
     }
   }
 
@@ -103,7 +113,8 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
             child: Column(
               children: [
                 Expanded(
-                  child: CustomPicker(
+                  child: pickerData.isNotEmpty
+                      ? CustomPicker(
                     initialValue: selectedValue,
                     data: pickerData,
                     onSelectedItemChanged: (value) {
@@ -111,6 +122,12 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
                         selectedValue = value;
                       });
                     },
+                  )
+                      : Center(
+                    child: Text(
+                      'No data available',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
                 Row(
@@ -119,7 +136,9 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
                     IconButton(
                       icon: const Icon(Icons.save, color: Colors.green),
                       onPressed: () {
-                        widget.onSave(pickerData, selectedValue);
+                        if (selectedValue != null) {
+                          widget.onSave(selectedValue);
+                        }
                       },
                     ),
                     IconButton(
@@ -167,11 +186,7 @@ class CustomPicker extends StatelessWidget {
   final List<dynamic> data;
   final ValueChanged<dynamic> onSelectedItemChanged;
 
-  const CustomPicker({super.key,
-    required this.initialValue,
-    required this.data,
-    required this.onSelectedItemChanged,
-  });
+  const CustomPicker({super.key, required this.initialValue, required this.data, required this.onSelectedItemChanged});
 
   @override
   Widget build(BuildContext context) {

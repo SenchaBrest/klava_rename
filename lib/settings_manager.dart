@@ -1,7 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'piano-lib/src/note_position.dart';
-import 'package:collection/collection.dart';
 
 class SettingsManager {
   static const String _settingsKeyPrefix = 'settings_';
@@ -47,7 +46,12 @@ class SettingsManager {
 
   Future<void> deleteSettings(String settingsName) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_settingsKeyPrefix + settingsName);
+    final allSettingsNames = await getAllSettingsNames();
+    if (allSettingsNames.length > 1) {
+      await prefs.remove(_settingsKeyPrefix + settingsName);
+    } else {
+      throw Exception('Cannot delete the last remaining settings.');
+    }
   }
 
   Future<List<String>> getAllSettingsNames() async {
@@ -73,24 +77,15 @@ class SettingsManager {
     settings.putIfAbsent(note, () => <String>{}).add(setting);
   }
 
-  // Method to reset settings to default
-  void resetSettings(Map<NotePosition, Set<String>> settings) {
-    settings.clear();
-    settings.addAll(defaultSettings);
-  }
-
   // Method to delete all settings for a specific note
   void deleteAllSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note) {
     settings.remove(note);
   }
 
-  // Method to delete a specific setting of a note
-  void deleteSpecificSettingOfNote(Map<NotePosition, Set<String>> settings, NotePosition note, String setting) {
-    if (settings.containsKey(note)) {
-      settings[note]!.remove(setting);
-      if (settings[note]!.isEmpty) {
-        settings.remove(note);
-      }
-    }
+  // Method to add a clean default setting with a given name
+  Future<void> addDefaultSettings(String settingsName) async {
+    final prefs = await SharedPreferences.getInstance();
+    String encodedSettings = json.encode(defaultSettings.map((k, v) => MapEntry(k.name, v.toList())));
+    await prefs.setString(_settingsKeyPrefix + settingsName, encodedSettings);
   }
 }

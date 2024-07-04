@@ -4,9 +4,14 @@ import 'package:flutter/services.dart';
 import 'settings_manager.dart';
 import 'piano-lib/piano.dart';
 import 'screens/sf2_settings.dart';
-import 'midi_manager.dart';
 import 'widgets/note_settings_widget.dart';
 import 'widgets/keyboard_settings_widget.dart';
+
+import 'package:flutter_sequencer/global_state.dart';
+import 'package:flutter_sequencer/models/sfz.dart';
+import 'package:flutter_sequencer/models/instrument.dart';
+import 'package:flutter_sequencer/sequence.dart';
+import 'package:flutter_sequencer/track.dart';
 
 void main() {
   runApp(KlavaRename());
@@ -20,8 +25,11 @@ class KlavaRename extends StatefulWidget {
 }
 
 class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStateMixin {
-  final MidiManager midiManager = MidiManager();
+  Track? selectedTrack;
+  List<Track> tracks = [];
+  final sequence = Sequence(tempo: 120.0, endBeat: 8.0);
 
+  Map<int, int> notesArePlaying = {};
   Map<NotePosition, Set<String>> settings = {};
   List<String> settingsNames = [];
   SettingsManager settingsManager = SettingsManager();
@@ -34,10 +42,9 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   bool showExtraButtons = false;
   bool showKeyboardSettings = false;
   late NotePosition tappedNote;
-  String pressedKey = "";
+  Set<String> pressedKeys = {};
   late AnimationController _animationController;
   late Animation<Offset> _offsetAnimation;
-
 
   @override
   void initState() {
@@ -58,6 +65,19 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
       parent: _animationController,
       curve: Curves.easeInOut,
     ));
+
+    GlobalState().setKeepEngineRunning(true);
+
+    final instruments = [
+      Sf2Instrument(path: "assets/sf2/Yamaha_XG_Sound_Set.sf2", isAsset: true),
+    ];
+
+    sequence.createTracks(instruments).then((tracks) {
+      this.tracks = tracks;
+      setState(() {
+        selectedTrack = tracks[0];
+      });
+    });
   }
 
   @override
@@ -69,7 +89,7 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
 
   bool _handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
-      pressedKey = event.physicalKey.debugName ?? '';
+      String pressedKey = event.physicalKey.debugName ?? '';
       if (pressedKey == 'Audio Volume Up' || pressedKey == 'Audio Volume Down') {
         return false;
       }
@@ -80,15 +100,25 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
           saveSettings();
         });
       } else {
+        setState(() {
+          pressedKeys.add(pressedKey);
+        });
         playNoteFromSettings(pressedKey);
       }
+    }
+
+    if (event is KeyUpEvent) {
+      String releasedKey = event.physicalKey.debugName ?? '';
+      setState(() {
+        pressedKeys.remove(releasedKey);
+      });
+      stopNoteFromSettings(releasedKey);
     }
     return true;
   }
 
   void loadSoundFont() async {
-    int sfId = await midiManager.loadSoundfont('assets/sf2/Super_Nintendo_Unofficial_update.sf2', 0, 0);
-    await midiManager.selectInstrument(sfId: sfId, program: 50, channel: 0, bank: 0);
+    // Load sound font logic
   }
 
   void loadSettings() async {
@@ -116,13 +146,24 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
         'B': 11,
       };
       int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
+      selectedTrack?.startNoteNow(noteNumber: midiNumber, velocity: 0.75);
+    }
+  }
 
-      midiManager.playNote(
-        key: midiNumber,
-        velocity: midiManager.volume.value,
-        channel: midiManager.channelIndex.value,
-        sfId: midiManager.selectedSfId.value!,
-      );
+  void stopNoteFromSettings(String key) {
+    Set<NotePosition>? positions = settingsManager.getNotesForSetting(settings, key);
+    for (var position in positions) {
+      Map<String, int> noteValues = {
+        'C': 0, 'C♯': 1,
+        'D': 2, 'D♯': 3,
+        'E': 4,
+        'F': 5, 'F♯': 6,
+        'G': 7, 'G♯': 8,
+        'A': 9, 'A♯': 10,
+        'B': 11,
+      };
+      int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
+      selectedTrack?.stopNoteNow(noteNumber: midiNumber);
     }
   }
 
@@ -176,16 +217,12 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
             ],
             if (showKeyboardSettings) ...[
               SinglePickerWidget(
-                initialData: settingsNames,
-                onSave: (List<String> newSettingsNames, String newCurrentSettingName) {
-                  settingsNames = newSettingsNames;
+                onSave: (String newCurrentSettingName) {
                   currentSettingsName = newCurrentSettingName;
                   loadSettings();
                   setState(() {
                     showKeyboardSettings = false;
-
                   });
-
                 },
                 onCancel: () {
                   setState(() {
