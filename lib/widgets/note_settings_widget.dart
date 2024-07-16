@@ -7,11 +7,11 @@ class NoteSettingsWidget extends StatefulWidget {
   final VoidCallback onDelete;
 
   const NoteSettingsWidget({
-    Key? key,
+    super.key,
     required this.text,
     required this.onCancel,
     required this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   _NoteSettingsWidgetState createState() => _NoteSettingsWidgetState();

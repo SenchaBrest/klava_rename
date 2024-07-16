@@ -3,18 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'settings_manager.dart';
 import 'piano-lib/piano.dart';
-import 'screens/sf2_settings.dart';
 import 'widgets/note_settings_widget.dart';
 import 'widgets/keyboard_settings_widget.dart';
+import 'widgets/music_settings_widget.dart';
 
 import 'package:flutter_sequencer/global_state.dart';
-import 'package:flutter_sequencer/models/sfz.dart';
 import 'package:flutter_sequencer/models/instrument.dart';
 import 'package:flutter_sequencer/sequence.dart';
 import 'package:flutter_sequencer/track.dart';
 
 void main() {
-  runApp(KlavaRename());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const KlavaRename());
 }
 
 class KlavaRename extends StatefulWidget {
@@ -33,24 +33,34 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   Map<NotePosition, Set<String>> settings = {};
   List<String> settingsNames = [];
   SettingsManager settingsManager = SettingsManager();
-  String defaultSettingsName = 'default';
-  String currentSettingsName = 'default';
+  late String currentSettingsName;
 
   bool isLoading = true;
   bool showNoteSettings = false;
   bool showSettings = false;
   bool showExtraButtons = false;
   bool showKeyboardSettings = false;
+  bool showMusicSettings = false;
   late NotePosition tappedNote;
   Set<String> pressedKeys = {};
   late AnimationController _animationController;
   late Animation<Offset> _offsetAnimation;
 
+  static const Map<String, int> noteValues = {
+    'C': 0, 'C♯': 1,
+    'D': 2, 'D♯': 3,
+    'E': 4,
+    'F': 5, 'F♯': 6,
+    'G': 7, 'G♯': 8,
+    'A': 9, 'A♯': 10,
+    'B': 11,
+  };
+
   @override
   void initState() {
     super.initState();
     loadSoundFont();
-    loadSettings();
+    loadDefaultSettings();
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
 
     _animationController = AnimationController(
@@ -104,6 +114,7 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
           pressedKeys.add(pressedKey);
         });
         playNoteFromSettings(pressedKey);
+        print(settings);
       }
     }
 
@@ -121,9 +132,17 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
     // Load sound font logic
   }
 
+  void loadDefaultSettings() async {
+    currentSettingsName = 'default';
+    settings = await settingsManager.loadSettings(currentSettingsName);
+
+    setState(() {
+      isLoading = false;
+    });
+  }
+
   void loadSettings() async {
     settings = await settingsManager.loadSettings(currentSettingsName);
-    settingsNames = await settingsManager.getAllSettingsNames();
     setState(() {
       isLoading = false;
     });
@@ -135,16 +154,8 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
 
   void playNoteFromSettings(String key) {
     Set<NotePosition>? positions = settingsManager.getNotesForSetting(settings, key);
+    print(positions);
     for (var position in positions) {
-      Map<String, int> noteValues = {
-        'C': 0, 'C♯': 1,
-        'D': 2, 'D♯': 3,
-        'E': 4,
-        'F': 5, 'F♯': 6,
-        'G': 7, 'G♯': 8,
-        'A': 9, 'A♯': 10,
-        'B': 11,
-      };
       int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
       selectedTrack?.startNoteNow(noteNumber: midiNumber, velocity: 0.75);
     }
@@ -153,15 +164,6 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   void stopNoteFromSettings(String key) {
     Set<NotePosition>? positions = settingsManager.getNotesForSetting(settings, key);
     for (var position in positions) {
-      Map<String, int> noteValues = {
-        'C': 0, 'C♯': 1,
-        'D': 2, 'D♯': 3,
-        'E': 4,
-        'F': 5, 'F♯': 6,
-        'G': 7, 'G♯': 8,
-        'A': 9, 'A♯': 10,
-        'B': 11,
-      };
       int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
       selectedTrack?.stopNoteNow(noteNumber: midiNumber);
     }
@@ -231,7 +233,24 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
                 },
               ),
             ],
-            if (!showNoteSettings && !showKeyboardSettings)
+            // if (showMusicSettings) ...[
+            //   DoublePickerWidget(
+            //     onSave: (String newCurrentSettingName) {
+            //       // currentSettingsName = newCurrentSettingName;
+            //       // loadSettings();
+            //       setState(() {
+            //         showMusicSettings = false;
+            //       });
+            //     },
+            //     onCancel: () {
+            //       setState(() {
+            //         showMusicSettings = false;
+            //       });
+            //     },
+            //   ),
+            //
+            // ],
+            if (!showNoteSettings && !showKeyboardSettings && !showMusicSettings)
               Positioned(
                 top: 40,
                 right: 20,
@@ -242,22 +261,25 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
                         position: _offsetAnimation,
                         child: Row(
                           children: [
-                            CupertinoButton(
-                              color: Colors.grey.withOpacity(0.5),
-                              padding: EdgeInsets.all(8),
-                              child: const Icon(
-                                Icons.music_note,
-                                size: 30,
-                                color: Colors.white,
-                              ),
-                              onPressed: () {
-                                // Your volume up action
-                              },
-                            ),
+                            // CupertinoButton(
+                            //   color: Colors.grey.withOpacity(0.5),
+                            //   padding: const EdgeInsets.all(8),
+                            //   child: const Icon(
+                            //     Icons.music_note,
+                            //     size: 30,
+                            //     color: Colors.white,
+                            //   ),
+                            //   onPressed: () {
+                            //     setState(() {
+                            //       showExtraButtons = false;
+                            //       showMusicSettings = true;
+                            //     });
+                            //   },
+                            // ),
                             const SizedBox(width: 10),
                             CupertinoButton(
                               color: Colors.grey.withOpacity(0.5),
-                              padding: EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(8),
                               child: const Icon(
                                 Icons.keyboard,
                                 size: 30,
@@ -276,7 +298,7 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
                       ),
                     CupertinoButton(
                       color: Colors.grey.withOpacity(0.5),
-                      padding: EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
                       child: Icon(
                         !showExtraButtons ? Icons.settings : Icons.keyboard_double_arrow_right,
                         size: 30,

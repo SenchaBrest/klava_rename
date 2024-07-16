@@ -269,7 +269,6 @@ class _PianoKey extends StatefulWidget {
   String noteKeyboardPosition;
 
   _PianoKey({
-    Key? key,
     required this.notePosition,
     required this.noteKeyboardPosition,
     required this.keyWidth,
@@ -283,8 +282,7 @@ class _PianoKey extends StatefulWidget {
             bottomRight: Radius.circular(keyWidth * 0.2)),
         _color = (highlightColor != null)
             ? Color.lerp(color, highlightColor, 0.5) ?? highlightColor
-            : color,
-        super(key: key);
+            : color;
 
   @override
   __PianoKeyState createState() => __PianoKeyState();
@@ -455,8 +453,7 @@ class _MaybeScrollbar extends StatelessWidget {
   final Widget child;
 
   const _MaybeScrollbar(
-      {Key? key, required this.scrollController, required this.child})
-      : super(key: key);
+      {required this.scrollController, required this.child});
 
   @override
   Widget build(BuildContext context) => (scrollController == null)

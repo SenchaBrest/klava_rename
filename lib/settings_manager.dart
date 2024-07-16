@@ -4,10 +4,12 @@ import 'piano-lib/src/note_position.dart';
 
 class SettingsManager {
   static const String _settingsKeyPrefix = 'settings_';
+  static const String _defaultSettingsKey = 'default_settings';
   final Map<NotePosition, Set<String>> defaultSettings = {};
 
   SettingsManager() {
     generateDefaultSettings();
+    initializeDefaultSettings();
   }
 
   void generateDefaultSettings() {
@@ -20,6 +22,15 @@ class SettingsManager {
           if (notePosition.name == 'C8') break;
         }
       }
+    }
+  }
+
+  Future<void> initializeDefaultSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final allSettingsNames = await getAllSettingsNames();
+    if (allSettingsNames.isEmpty) {
+      await addDefaultSettings('default');
+      await setDefaultSettings('default');
     }
   }
 
@@ -44,14 +55,21 @@ class SettingsManager {
     }
   }
 
-  Future<void> deleteSettings(String settingsName) async {
+  Future<bool> deleteSettings(String settingsName) async {
     final prefs = await SharedPreferences.getInstance();
+    final defaultSettingsName = await getDefaultSettingsName();
+    if (settingsName == defaultSettingsName) {
+      // throw Exception('Cannot delete the default settings.');
+      return false;
+    }
     final allSettingsNames = await getAllSettingsNames();
     if (allSettingsNames.length > 1) {
       await prefs.remove(_settingsKeyPrefix + settingsName);
     } else {
-      throw Exception('Cannot delete the last remaining settings.');
+      // throw Exception('Cannot delete the last remaining settings.');
+      return false;
     }
+    return true;
   }
 
   Future<List<String>> getAllSettingsNames() async {
@@ -87,5 +105,27 @@ class SettingsManager {
     final prefs = await SharedPreferences.getInstance();
     String encodedSettings = json.encode(defaultSettings.map((k, v) => MapEntry(k.name, v.toList())));
     await prefs.setString(_settingsKeyPrefix + settingsName, encodedSettings);
+  }
+
+  // Method to set the default settings name
+  Future<void> setDefaultSettings(String settingsName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_defaultSettingsKey, settingsName);
+  }
+
+  // Method to get the default settings name
+  Future<String?> getDefaultSettingsName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_defaultSettingsKey);
+  }
+
+  // Method to load the default settings
+  Future<Map<NotePosition, Set<String>>> loadDefaultSettings() async {
+    final defaultSettingsName = await getDefaultSettingsName();
+    if (defaultSettingsName != null) {
+      return loadSettings(defaultSettingsName);
+    } else {
+      return Map<NotePosition, Set<String>>.from(defaultSettings);
+    }
   }
 }

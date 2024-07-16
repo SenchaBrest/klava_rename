@@ -22,6 +22,8 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
   TextEditingController textController = TextEditingController();
   bool showInputField = false;
   final SettingsManager settingsManager = SettingsManager();
+  String? defaultSettingsName;
+  Key customPickerKey = UniqueKey();
 
   @override
   void initState() {
@@ -31,10 +33,12 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
 
   Future<void> _loadInitialData() async {
     List<String> settingsNames = await settingsManager.getAllSettingsNames();
+    String? defaultName = await settingsManager.getDefaultSettingsName();
     setState(() {
       pickerData = settingsNames;
+      defaultSettingsName = defaultName;
       if (pickerData.isNotEmpty) {
-        selectedValue = pickerData[0];
+        selectedValue = defaultName ?? pickerData[0];
       }
     });
   }
@@ -48,19 +52,29 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
     await settingsManager.addDefaultSettings(newEntry);
   }
 
-  void _removeEntry() async {
+  Future<void> _removeEntry() async {
     if (pickerData.isNotEmpty) {
       String entryToRemove = selectedValue;
-      setState(() {
-        pickerData.remove(entryToRemove);
-        if (pickerData.isNotEmpty) {
-          selectedValue = pickerData[0];
-        } else {
-          selectedValue = null;
-        }
-      });
-      await settingsManager.deleteSettings(entryToRemove);
+      bool toRemove = await settingsManager.deleteSettings(entryToRemove);
+      if (toRemove) {
+        setState(() {
+          pickerData.remove(entryToRemove);
+          if (pickerData.isNotEmpty) {
+            selectedValue = defaultSettingsName ?? pickerData[0];
+          } else {
+            selectedValue = null;
+          }
+          customPickerKey = UniqueKey(); // Update key to trigger rebuild of CustomPicker
+        });
+      }
     }
+  }
+
+  Future<void> _setDefaultSettings(String settingsName) async {
+    await settingsManager.setDefaultSettings(settingsName);
+    setState(() {
+      defaultSettingsName = settingsName;
+    });
   }
 
   @override
@@ -115,6 +129,7 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
                 Expanded(
                   child: pickerData.isNotEmpty
                       ? CustomPicker(
+                    keyForPicker: customPickerKey, // Pass key to CustomPicker
                     initialValue: selectedValue,
                     data: pickerData,
                     onSelectedItemChanged: (value) {
@@ -123,7 +138,7 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
                       });
                     },
                   )
-                      : Center(
+                      : const Center(
                     child: Text(
                       'No data available',
                       style: TextStyle(color: Colors.white),
@@ -171,6 +186,25 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
                     ),
                   ],
                 ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Checkbox(
+                      value: selectedValue == defaultSettingsName,
+                      onChanged: (bool? value) {
+                        if (value == true) {
+                          _setDefaultSettings(selectedValue);
+                        }
+                      },
+                      checkColor: Colors.white,
+                      activeColor: Colors.green,
+                    ),
+                    const Text(
+                      'Set as default',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 20), // Add space if needed
               ],
             ),
@@ -182,21 +216,26 @@ class _SinglePickerWidgetState extends State<SinglePickerWidget> {
 }
 
 class CustomPicker extends StatelessWidget {
+  @override
+  final Key keyForPicker;
   final dynamic initialValue;
   final List<dynamic> data;
   final ValueChanged<dynamic> onSelectedItemChanged;
 
-  const CustomPicker({super.key, required this.initialValue, required this.data, required this.onSelectedItemChanged});
+  const CustomPicker({required this.keyForPicker, required this.initialValue, required this.data, required this.onSelectedItemChanged});
 
   @override
   Widget build(BuildContext context) {
+    final scrollController = FixedExtentScrollController(initialItem: data.indexOf(initialValue));
+
     return SizedBox(
       width: double.infinity,
       height: 200,
       child: CupertinoPicker(
+        key: keyForPicker, // Use the provided key
         backgroundColor: Colors.black87,
         itemExtent: 30,
-        scrollController: FixedExtentScrollController(initialItem: data.indexOf(initialValue)),
+        scrollController: scrollController,
         children: data.map<Widget>((item) {
           return Center(
             child: Text(

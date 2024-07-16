@@ -6,10 +6,10 @@ class SettingsWidget extends StatefulWidget {
   final VoidCallback onCancel;
 
   const SettingsWidget({
-    Key? key,
+    super.key,
     required this.onSave,
     required this.onCancel,
-  }) : super(key: key);
+  });
 
   @override
   _SettingsWidgetState createState() => _SettingsWidgetState();
@@ -85,7 +85,7 @@ class CustomPicker extends StatelessWidget {
   final List<dynamic> data;
   final ValueChanged<dynamic> onSelectedItemChanged;
 
-  CustomPicker({
+  const CustomPicker({super.key, 
     required this.initialValue,
     required this.data,
     required this.onSelectedItemChanged,
@@ -93,7 +93,7 @@ class CustomPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 200,
       child: CupertinoPicker(
         backgroundColor: Colors.black87,
