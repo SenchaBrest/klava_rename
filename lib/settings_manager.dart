@@ -5,11 +5,15 @@ import 'piano-lib/src/note_position.dart';
 class SettingsManager {
   static const String _settingsKeyPrefix = 'settings_';
   static const String _defaultSettingsKey = 'default_settings';
-  final Map<NotePosition, Set<String>> defaultSettings = {};
+  final Map<String, Set<String>> defaultSettings = {};
 
   SettingsManager() {
+    _init();
+  }
+
+  Future<void> _init() async {
     generateDefaultSettings();
-    initializeDefaultSettings();
+    await initializeDefaultSettings();
   }
 
   void generateDefaultSettings() {
@@ -17,8 +21,11 @@ class SettingsManager {
     for (int octave = 0; octave <= 8; octave++) {
       for (Note note in notes) {
         for (Accidental accidental in note.accidentals) {
+          if (accidental == Accidental.Flat) {
+            continue;
+          }
           NotePosition notePosition = NotePosition(note: note, octave: octave, accidental: accidental);
-          defaultSettings[notePosition] = {};
+          defaultSettings[notePosition.name] = {};
           if (notePosition.name == 'C8') break;
         }
       }
@@ -26,7 +33,6 @@ class SettingsManager {
   }
 
   Future<void> initializeDefaultSettings() async {
-    final prefs = await SharedPreferences.getInstance();
     final allSettingsNames = await getAllSettingsNames();
     if (allSettingsNames.isEmpty) {
       await addDefaultSettings('default');
@@ -34,24 +40,32 @@ class SettingsManager {
     }
   }
 
-  Future<void> saveSettings(String settingsName, Map<NotePosition, Set<String>> settings) async {
+  Future<void> saveSettings(String settingsName, Map<String, Set<String>> settings) async {
     final prefs = await SharedPreferences.getInstance();
-    String encodedSettings = json.encode(settings.map((k, v) => MapEntry(k.name, v.toList())));
-    await prefs.setString(_settingsKeyPrefix + settingsName, encodedSettings);
+    List<Map<String, dynamic>> encodedSettings = settings.entries.map((entry) {
+      return {
+        'notePosition': entry.key,
+        'settings': entry.value.toList(),
+      };
+    }).toList();
+    String jsonSettings = json.encode(encodedSettings);
+    await prefs.setString(_settingsKeyPrefix + settingsName, jsonSettings);
   }
 
-  Future<Map<NotePosition, Set<String>>> loadSettings(String settingsName) async {
+  Future<Map<String, Set<String>>> loadSettings(String settingsName) async {
     final prefs = await SharedPreferences.getInstance();
-    String? encodedSettings = prefs.getString(_settingsKeyPrefix + settingsName);
-    if (encodedSettings != null) {
-      Map<String, dynamic> decodedMap = json.decode(encodedSettings);
-      return decodedMap.map((k, v) {
-        var key = NotePosition.fromName(k)!;
-        var value = v is List ? Set<String>.from(v) : <String>{v};
-        return MapEntry(key, value);
-      });
+    String? jsonSettings = prefs.getString(_settingsKeyPrefix + settingsName);
+    if (jsonSettings != null) {
+      List<dynamic> decodedList = json.decode(jsonSettings);
+      Map<String, Set<String>> settings = {};
+      for (var item in decodedList) {
+        String notePositionName = item['notePosition'];
+        Set<String> settingValues = Set<String>.from(item['settings']);
+        settings[notePositionName] = settingValues;
+      }
+      return settings;
     } else {
-      return Map<NotePosition, Set<String>>.from(defaultSettings);
+      return Map<String, Set<String>>.from(defaultSettings);
     }
   }
 
@@ -59,14 +73,12 @@ class SettingsManager {
     final prefs = await SharedPreferences.getInstance();
     final defaultSettingsName = await getDefaultSettingsName();
     if (settingsName == defaultSettingsName) {
-      // throw Exception('Cannot delete the default settings.');
       return false;
     }
     final allSettingsNames = await getAllSettingsNames();
     if (allSettingsNames.length > 1) {
       await prefs.remove(_settingsKeyPrefix + settingsName);
     } else {
-      // throw Exception('Cannot delete the last remaining settings.');
       return false;
     }
     return true;
@@ -80,52 +92,118 @@ class SettingsManager {
         .toList();
   }
 
-  // Method to get the settings for a specific note
-  Set<String>? getSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note) {
-    return settings[note];
+  Set<String>? getSettingsForNote(Map<String, Set<String>> settings, String notePositionName) {
+    return settings[notePositionName];
   }
 
-  // Method to get the notes for a specific setting
-  Set<NotePosition> getNotesForSetting(Map<NotePosition, Set<String>> settings, String setting) {
+  Set<String> getNotesForSetting(Map<String, Set<String>> settings, String setting) {
     return settings.keys.where((k) => settings[k]!.contains(setting)).toSet();
   }
 
-  // Method to set the settings for a specific note and remove it from other notes
-  void setSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note, String setting) {
-    settings.putIfAbsent(note, () => <String>{}).add(setting);
+  void setSettingsForNote(Map<String, Set<String>> settings, String notePositionName, String setting) {
+    settings.putIfAbsent(notePositionName, () => <String>{}).add(setting);
   }
 
-  // Method to delete all settings for a specific note
-  void deleteAllSettingsForNote(Map<NotePosition, Set<String>> settings, NotePosition note) {
-    settings.remove(note);
+  void deleteAllSettingsForNote(Map<String, Set<String>> settings, String notePositionName) {
+    settings.remove(notePositionName);
   }
 
-  // Method to add a clean default setting with a given name
-  Future<void> addDefaultSettings(String settingsName) async {
+  Future<String> addDefaultSettings(String settingsName) async {
+    final allSettingsNames = await getAllSettingsNames();
+    while (allSettingsNames.contains(settingsName)) {
+      String newSettingsName = incrementNumberAtEnd(settingsName);
+      if (settingsName == newSettingsName) {
+        settingsName = '$settingsName (1)';
+      }
+      else {
+        settingsName = newSettingsName;
+      }
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    String encodedSettings = json.encode(defaultSettings.map((k, v) => MapEntry(k.name, v.toList())));
-    await prefs.setString(_settingsKeyPrefix + settingsName, encodedSettings);
+    List<Map<String, dynamic>> encodedSettings = defaultSettings.entries.map((entry) {
+      return {
+        'notePosition': entry.key,
+        'settings': entry.value.toList(),
+      };
+    }).toList();
+    String jsonSettings = json.encode(encodedSettings);
+    await prefs.setString(_settingsKeyPrefix + settingsName, jsonSettings);
+
+    return settingsName;
   }
 
-  // Method to set the default settings name
   Future<void> setDefaultSettings(String settingsName) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_defaultSettingsKey, settingsName);
   }
 
-  // Method to get the default settings name
   Future<String?> getDefaultSettingsName() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_defaultSettingsKey);
   }
 
-  // Method to load the default settings
-  Future<Map<NotePosition, Set<String>>> loadDefaultSettings() async {
+  Future<Map<String, Set<String>>> loadDefaultSettings() async {
     final defaultSettingsName = await getDefaultSettingsName();
     if (defaultSettingsName != null) {
       return loadSettings(defaultSettingsName);
     } else {
-      return Map<NotePosition, Set<String>>.from(defaultSettings);
+      return Map<String, Set<String>>.from(defaultSettings);
     }
   }
+
+  Future<String> exportSettingsToJsonString(String settingsName) async {
+    final settings = await loadSettings(settingsName);
+    List<Map<String, dynamic>> encodedSettings = settings.entries.map((entry) {
+      return {
+        'notePosition': entry.key,
+        'settings': entry.value.toList(),
+      };
+    }).toList();
+    return json.encode({
+      'settingsName': settingsName,
+      'settings': encodedSettings,
+    });
+  }
+
+  Future<String> importSettingsFromJsonString(String jsonString) async {
+    final decodedData = json.decode(jsonString);
+    String settingsName = decodedData['settingsName'];
+    List<dynamic> settingsList = decodedData['settings'];
+
+    final allSettingsNames = await getAllSettingsNames();
+    while (allSettingsNames.contains(settingsName)) {
+      String newSettingsName = incrementNumberAtEnd(settingsName);
+      if (settingsName == newSettingsName) {
+        settingsName = '$settingsName (1)';
+      }
+      else {
+        settingsName = newSettingsName;
+      }
+    }
+
+    Map<String, Set<String>> settings = {};
+    for (var item in settingsList) {
+      String notePositionName = item['notePosition'];
+      Set<String> settingValues = Set<String>.from(item['settings']);
+      settings[notePositionName] = settingValues;
+    }
+    await saveSettings(settingsName, settings);
+
+    return settingsName;
+  }
+}
+
+String incrementNumberAtEnd(String input) {
+  final regExp = RegExp(r'\s\((\d+)\)$');
+  final match = regExp.firstMatch(input);
+
+  if (match != null) {
+    final number = int.parse(match.group(1)!);
+    final incrementedNumber = number + 1;
+
+    return input.replaceFirst(regExp, ' ($incrementedNumber)');
+  }
+
+  return input;
 }

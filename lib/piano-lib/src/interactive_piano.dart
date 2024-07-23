@@ -45,7 +45,7 @@ class InteractivePiano extends StatefulWidget {
   /// Set and change at any time (i.e. with `setState`) to cause the piano to scroll so that the desired note is centered.
   final NotePosition? noteToScrollTo;
 
-  Map<NotePosition, Set<String>> settings;
+  final Map<String, Set<String>> settings;
 
   /// See individual parameters for more information. The only required parameter
   /// is `noteRange`. Since the widget wraps a scroll view and therefore has no
@@ -97,7 +97,6 @@ class _InteractivePianoState extends State<InteractivePiano> {
   @override
   void initState() {
     _updateNotePositions();
-    print(widget.settings);
     super.initState();
   }
 
@@ -198,7 +197,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
                             children: naturals
                                 .map((note) => _PianoKey(
                                     notePosition: note,
-                                    noteKeyboardPosition: widget.settings[note]?.join('\n') ?? '',
+                                    noteKeyboardPosition: widget.settings[note.name]?.join('\n') ?? '',
                                     color: widget.naturalColor,
                                     hideNoteName: widget.hideNoteNames,
                                     isAnimated: widget
@@ -225,7 +224,7 @@ class _InteractivePianoState extends State<InteractivePiano> {
                                         .map(
                                           (note) => _PianoKey(
                                             notePosition: note,
-                                            noteKeyboardPosition: widget.settings[note]?.join('\n') ?? '',
+                                            noteKeyboardPosition: widget.settings[note.name]?.join('\n') ?? '',
                                             color: widget.accidentalColor,
                                             hideNoteName: widget.hideNoteNames,
                                             isAnimated: widget
@@ -266,7 +265,7 @@ class _PianoKey extends StatefulWidget {
 
   final Color _color;
 
-  String noteKeyboardPosition;
+  final String noteKeyboardPosition;
 
   _PianoKey({
     required this.notePosition,
@@ -295,7 +294,6 @@ class __PianoKeyState extends State<_PianoKey>
 
   @override
   void initState() {
-    print(widget.notePosition.name);
     super.initState();
 
     const animationBegin = 1.0;
@@ -389,13 +387,13 @@ class __PianoKeyState extends State<_PianoKey>
                       padding: const EdgeInsets.all(2),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.blue, // Цвет фона
-                          borderRadius: BorderRadius.circular(8), // Закругленные углы
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           widget.noteKeyboardPosition,
                           textAlign: TextAlign.center,
-                          textScaleFactor: 1.0,
+                          // textScaler: 1.0,
                           style: TextStyle(
                             fontSize: widget.keyWidth / 3.5,
                             color: widget.notePosition.accidental == Accidental.None
@@ -421,13 +419,13 @@ class __PianoKeyState extends State<_PianoKey>
                       padding: const EdgeInsets.all(2),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.green, // Цвет фона для второго текста
+                          color: Colors.green,
                           borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
                           widget.notePosition.name,
                           textAlign: TextAlign.center,
-                          textScaleFactor: 1.0,
+                          // textScaleFactor: 1.0,
                           style: TextStyle(
                             fontSize: widget.keyWidth / 3.5,
                             color: widget.notePosition.accidental == Accidental.None

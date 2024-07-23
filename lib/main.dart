@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'settings_manager.dart';
@@ -6,6 +7,7 @@ import 'piano-lib/piano.dart';
 import 'widgets/note_settings_widget.dart';
 import 'widgets/keyboard_settings_widget.dart';
 import 'widgets/music_settings_widget.dart';
+import 'keyboard_map.dart';
 
 import 'package:flutter_sequencer/global_state.dart';
 import 'package:flutter_sequencer/models/instrument.dart';
@@ -27,10 +29,10 @@ class KlavaRename extends StatefulWidget {
 class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStateMixin {
   Track? selectedTrack;
   List<Track> tracks = [];
-  final sequence = Sequence(tempo: 120.0, endBeat: 8.0);
+  final sequence = Sequence(tempo: 120.0, endBeat: 80.0);
 
   Map<int, int> notesArePlaying = {};
-  Map<NotePosition, Set<String>> settings = {};
+  Map<String, Set<String>> settings = {};
   List<String> settingsNames = [];
   SettingsManager settingsManager = SettingsManager();
   late String currentSettingsName;
@@ -45,16 +47,6 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   Set<String> pressedKeys = {};
   late AnimationController _animationController;
   late Animation<Offset> _offsetAnimation;
-
-  static const Map<String, int> noteValues = {
-    'C': 0, 'C♯': 1,
-    'D': 2, 'D♯': 3,
-    'E': 4,
-    'F': 5, 'F♯': 6,
-    'G': 7, 'G♯': 8,
-    'A': 9, 'A♯': 10,
-    'B': 11,
-  };
 
   @override
   void initState() {
@@ -98,15 +90,14 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   }
 
   bool _handleKeyEvent(KeyEvent event) {
+    String pressedKey = getKeyLabel(event.physicalKey) ?? '';
+    if (pressedKey == '') return false;
+
     if (event is KeyDownEvent) {
-      String pressedKey = event.physicalKey.debugName ?? '';
-      if (pressedKey == 'Audio Volume Up' || pressedKey == 'Audio Volume Down') {
-        return false;
-      }
       if (showNoteSettings) {
         setState(() {
           showNoteSettings = false;
-          settingsManager.setSettingsForNote(settings, tappedNote, pressedKey);
+          settingsManager.setSettingsForNote(settings, tappedNote.name, pressedKey);
           saveSettings();
         });
       } else {
@@ -114,16 +105,14 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
           pressedKeys.add(pressedKey);
         });
         playNoteFromSettings(pressedKey);
-        print(settings);
       }
     }
 
     if (event is KeyUpEvent) {
-      String releasedKey = event.physicalKey.debugName ?? '';
       setState(() {
-        pressedKeys.remove(releasedKey);
+        pressedKeys.remove(pressedKey);
       });
-      stopNoteFromSettings(releasedKey);
+      stopNoteFromSettings(pressedKey);
     }
     return true;
   }
@@ -133,7 +122,7 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   }
 
   void loadDefaultSettings() async {
-    currentSettingsName = 'default';
+    currentSettingsName = (await settingsManager.getDefaultSettingsName())!;
     settings = await settingsManager.loadSettings(currentSettingsName);
 
     setState(() {
@@ -153,19 +142,24 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
   }
 
   void playNoteFromSettings(String key) {
-    Set<NotePosition>? positions = settingsManager.getNotesForSetting(settings, key);
-    print(positions);
-    for (var position in positions) {
-      int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
-      selectedTrack?.startNoteNow(noteNumber: midiNumber, velocity: 0.75);
+    Set<String> positions = settingsManager.getNotesForSetting(settings, key);
+    List<int?> midiNumbers = positions.map((position) => NotePosition.fromName(position)?.pitch).toList();
+
+    for (var midiNumber in midiNumbers) {
+      if (midiNumber != null) {
+        selectedTrack?.startNoteNow(noteNumber: midiNumber, velocity: 0.75);
+      }
     }
   }
 
   void stopNoteFromSettings(String key) {
-    Set<NotePosition>? positions = settingsManager.getNotesForSetting(settings, key);
-    for (var position in positions) {
-      int midiNumber = 12 * (position.octave + 1) + noteValues["${position.note.name}${position.accidental.symbol}"]!;
-      selectedTrack?.stopNoteNow(noteNumber: midiNumber);
+    Set<String> positions = settingsManager.getNotesForSetting(settings, key);
+    List<int?> midiNumbers = positions.map((position) => NotePosition.fromName(position)?.pitch).toList();
+
+    for (var midiNumber in midiNumbers) {
+      if (midiNumber != null) {
+        selectedTrack?.stopNoteNow(noteNumber: midiNumber);
+      }
     }
   }
 
@@ -212,7 +206,7 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
                   setState(() {
                     showNoteSettings = false;
                   });
-                  settingsManager.deleteAllSettingsForNote(settings, tappedNote);
+                  settingsManager.deleteAllSettingsForNote(settings, tappedNote.name);
                   saveSettings();
                 },
               ),
