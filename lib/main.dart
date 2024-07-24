@@ -8,6 +8,7 @@ import 'widgets/note_settings_widget.dart';
 import 'widgets/keyboard_settings_widget.dart';
 import 'widgets/music_settings_widget.dart';
 import 'keyboard_map.dart';
+import 'widgets/custom_container.dart';
 
 import 'package:flutter_sequencer/global_state.dart';
 import 'package:flutter_sequencer/models/instrument.dart';
@@ -171,28 +172,38 @@ class _KlavaRenameState extends State<KlavaRename> with SingleTickerProviderStat
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
-            Center(
-              child: isLoading
-                  ? const CircularProgressIndicator()
-                  : AbsorbPointer(
-                absorbing: showExtraButtons || showNoteSettings,
-                child: InteractivePiano(
-                  settings: settings,
-                  naturalColor: Colors.white,
-                  accidentalColor: Colors.black,
-                  keyWidth: 60,
-                  noteRange: NoteRange(
-                    from: NotePosition(note: Note.A, octave: 0),
-                    to: NotePosition(note: Note.C, octave: 8),
-                  ),
-                  onNotePositionTapped: (position) {
-                    setState(() {
-                      tappedNote = position;
-                      showNoteSettings = true;
-                    });
-                  },
+            Row(
+              children: [
+                const SizedBox(
+                  width: 200,
+                  child: CustomContainer(),
                 ),
-              ),
+                Expanded(
+                  child: Center(
+                    child: isLoading
+                        ? const CircularProgressIndicator()
+                        : AbsorbPointer(
+                      absorbing: showExtraButtons || showNoteSettings,
+                      child: InteractivePiano(
+                        settings: settings,
+                        naturalColor: Colors.white,
+                        accidentalColor: Colors.black,
+                        keyWidth: 60,
+                        noteRange: NoteRange(
+                          from: NotePosition(note: Note.A, octave: 0),
+                          to: NotePosition(note: Note.C, octave: 8),
+                        ),
+                        onNotePositionTapped: (position) {
+                          setState(() {
+                            tappedNote = position;
+                            showNoteSettings = true;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (showNoteSettings) ...[
               NoteSettingsWidget(
